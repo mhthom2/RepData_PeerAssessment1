@@ -1,25 +1,207 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "Course Project 1: Step Analysis"
+output: html_document
+date: "2024-05-09"
 ---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
 
+```{r}
+suppressMessages({
+        suppressWarnings(
+        {
+                library(dplyr)
+                library(ggplot2)
+                library(cowplot)
+        })
+})
+```
 
-## Loading and preprocessing the data
+## Part 1: Load and preprocess the data. 
 
+### 1. Load data
+```{r}
+data <- read.csv('activity.csv')
+head(data)
+```
 
+## Part 2: What is mean total number of steps taken per day?
 
-## What is mean total number of steps taken per day?
+### A. Calculate the total number of steps taken per day.
+```{r cars}
+sum_data <- data %>% group_by(date) %>% summarize(Sum_Steps = 
+                                                          sum(steps, na.rm=TRUE))
+```
 
+### B. Make a histogram of the total number of steps taken each day.
+```{r}
+hist(sum_data$Sum_Steps,
+     main="Total Number of Steps Taken Each Day",
+     xlab="Steps Taken",
+     ylab='Frequency of Steps Taken',
+     ylim=c(0, 30),
+     col="darkmagenta"
+     )
+```
 
+### C. Calculate the mean and median of the total of steps taken per day. 
+```{r}
+mean <- mean(sum_data$Sum_Steps, na.rm = TRUE)
+median <- median(sum_data$Sum_Steps, na.rm = TRUE)
+print(paste('Mean of total of steps taken per day is', mean))
+print(paste('Median of total of steps taken per day is', median))
+```
 
-## What is the average daily activity pattern?
+## Part 3: What is the average daily activity pattern?
 
+### A. Make a time series plot of the 5-minute interval (x-axis) and <br> 
+### the average number of steps taken, averaged across all days.
+```{r}
+interval_data <- data %>% group_by(interval) %>% 
+        summarize(Mean_Interval = mean(steps, na.rm=TRUE))
 
+p <- ggplot(interval_data, aes(x=interval, y=Mean_Interval)) + 
+            geom_line(color="turquoise4") + theme_minimal() + 
+            labs(x="Five-Minute Intervals", 
+                 y="Mean Number of Steps", 
+                 title="Mean Number of Steps for Each Five-Minute Interval") 
+print(p)
+```
 
-## Imputing missing values
+### B. Which 5-minute interval, on average across all the days in the data set, <br> 
+### contains the maximum number of steps?
+```{r}
+max <- max(interval_data$Mean_Interval, na.rm = TRUE)
+print(paste('Max of mean of total of steps taken each five-minute interval is'
+            , max))
+```
 
+## Part 4: Imputing missing values
 
+### A. Calculate and report the total number of missing values in the data set.
+```{r}
+frac_missing <- sum(is.na(data$steps))  / length(data$steps)
+print(paste('Proportion of missing values is', frac_missing))
+```
 
-## Are there differences in activity patterns between weekdays and weekends?
+### B. Devise a strategy for filling in all of the missing values in the data set.
+
+Missing values don't seem to be randomly distributed,
+and without more information about why they are missing, <br>
+removing entries with missing values seems to be the best approach.
+So my approach is to locate rows with missing values, and delete them. 
+
+### C. Create a new data set with the missing data filled in.
+```{r}
+new_data <- data[complete.cases(data), ]
+head(new_data)
+```
+
+### D. Make a histogram of the total number of steps taken each day.
+
+#### Calculate total number of steps 
+```{r}
+new_sum_data <- new_data %>% group_by(date) %>% 
+                summarize(Sum_Steps = sum(steps, na.rm=TRUE))
+head(new_sum_data)
+```
+
+#### Plot histogram 
+```{r}
+hist(new_sum_data$Sum_Steps,
+     main="Total Number of Steps Taken\nEach Day",
+     xlab="Steps Taken",
+     ylab='Frequency of Steps Taken',
+     ylim=c(0, 30),
+     col="royalblue4"
+)
+```
+
+## E. Calculate and report the mean and median total number of steps taken per day.
+```{r}
+new_mean <- mean(new_sum_data$Sum_Steps, na.rm = TRUE)
+new_median <- median(new_sum_data$Sum_Steps, na.rm = TRUE)
+print(paste('Mean of total of steps taken per day is', new_mean))
+print(paste('Median of total of steps taken per day is', new_median))
+```
+
+## F. What is the impact of imputing missing data on the estimates? 
+```{r}
+perc_mean_diff <- (mean - new_mean) / mean(mean, new_mean) * 100 
+print(paste('The percent difference between the first mean and the second is ', 
+            perc_mean_diff, '%', sep=''))
+perc_median_diff <- (median - new_median) / mean(median, new_median) * 100 
+print(paste('The percent difference between the first median and the second is ',
+            perc_median_diff, '%', sep=''))
+
+```
+
+After dropping the missing values, the mean dropped about 15%,
+and the median dropped by about 3.5%.
+
+## Part 5: Are there differences in activity between weekdays and weekends?
+
+### A. Create a new factor variable for “weekday” and “weekend”.
+
+#### Convert date column to POSIXlt class 
+```{r}
+new_data$day <- strftime(new_data$date, "%A")
+```
+
+#### Find weekend values 
+```{r}
+weekend <- c('Sunday', 'Saturday')
+```
+
+#### Create mask to find weekend days 
+```{r}
+mask <- new_data$day %in% weekend
+```
+
+#### Create factor column 'day_category'
+```{r}
+new_data$day_category <- factor(mask, 
+                                levels=c(FALSE, TRUE),
+                                labels = c("weekday", "weekend"))
+head(new_data)
+```
+
+### B. Make a panel plot containing a time series plot of the 5-minute interval <br> 
+### and average number of steps taken, averaged across all the days. 
+```{r}
+new_interval_data <- new_data %>% group_by(day_category, interval) %>% 
+        summarize(Mean_Interval = mean(steps))
+```
+
+#### Separate data into weekend and weekday data frames 
+```{r}
+weekend_data <- new_interval_data[new_interval_data$day_category %in% c('weekend'), ]
+weekday_data <- new_interval_data[new_interval_data$day_category %in% c('weekday'), ]
+```
+
+#### Create panel plot
+
+##### Create weekday data plot
+```{r}
+p1 <- ggplot(weekday_data, aes(x=interval, y=Mean_Interval)) + 
+        geom_line(color="deepskyblue4") + theme_minimal() + 
+        labs(x="Five-Minute Intervals", 
+             y="Mean Number of Steps", 
+             title="Mean Number of Steps for Each Five-Minute Interval on Weekdays") 
+```
+
+##### Create weekend data plot
+```{r}
+p2 <- ggplot(weekend_data, aes(x=interval, y=Mean_Interval)) + 
+        geom_line(color="darkolivegreen4") + theme_minimal() + 
+        labs(x="Five-Minute Intervals", 
+             y="Mean Number of Steps", 
+             title="Mean Number of Steps for Each Five-Minute Interval on Weekends") 
+```
+
+##### Plot on panel 
+```{r}
+plot_grid(p1, p2, ncol = 1, nrow = 2)
+```
+
